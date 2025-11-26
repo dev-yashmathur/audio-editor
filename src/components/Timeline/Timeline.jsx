@@ -3,7 +3,7 @@ import Track from './Track';
 import useAudioStore from '../../store/useAudioStore';
 
 const Timeline = () => {
-    const { tracks, clips, zoom, currentTime } = useAudioStore();
+    const { tracks, clips, zoom, currentTime, addTrack } = useAudioStore();
     const containerRef = React.useRef(null);
     const [scrollLeft, setScrollLeft] = React.useState(0);
 
@@ -136,12 +136,30 @@ const Timeline = () => {
                     zIndex: 21,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 8px',
                     fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)'
                 }}>
-                    TRACKS
+                    <span>TRACKS</span>
+                    <button
+                        onClick={addTrack}
+                        style={{
+                            background: 'none',
+                            border: '1px solid var(--border)',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            padding: '2px 6px',
+                            fontSize: '10px',
+                            color: 'var(--text-main)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                        }}
+                    >
+                        + Add
+                    </button>
                 </div>
 
                 {/* Ruler Ticks */}

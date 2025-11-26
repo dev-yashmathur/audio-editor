@@ -1,8 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import useAudioStore from '../../store/useAudioStore';
 
 const Clip = ({ clip, zoom }) => {
+    const { selection, setSelection, moveClip, pushHistoryState } = useAudioStore();
+    const isSelected = selection.includes(clip.id);
+
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+    const dragOffsetRef = useRef({ x: 0, y: 0 });
+    const clipRef = useRef(null);
+
     const width = clip.duration * zoom;
-    const left = clip.startTime * zoom;
 
     // Generate SVG path for waveform
     const waveformPath = useMemo(() => {
@@ -32,44 +40,140 @@ const Clip = ({ clip, zoom }) => {
         return path;
     }, [clip.waveform, width]);
 
+    const handleMouseDown = (e) => {
+        e.stopPropagation();
+        e.preventDefault(); // Prevent text selection
+        pushHistoryState(); // Save state before drag
+        setSelection([clip.id]); // Single select for now
+
+        const rect = clipRef.current.getBoundingClientRect();
+        dragOffsetRef.current = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+
+        setDragPosition({
+            x: rect.left,
+            y: rect.top
+        });
+        setIsDragging(true);
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isDragging) return;
+
+            setDragPosition({
+                x: e.clientX - dragOffsetRef.current.x,
+                y: e.clientY - dragOffsetRef.current.y
+            });
+        };
+
+        const handleMouseUp = (e) => {
+            if (!isDragging) return;
+
+            setIsDragging(false);
+
+            // Calculate new time and track
+            // We need to find the timeline container to get relative X
+            // And find the track element under the cursor
+
+            // 1. Find Track
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            const trackElement = elements.find(el => el.getAttribute('data-track-id'));
+            const newTrackId = trackElement ? trackElement.getAttribute('data-track-id') : null;
+
+            // 2. Find Time
+            // We can use the drop X position relative to the track element
+            let newTime = clip.startTime;
+
+            if (trackElement) {
+                const trackRect = trackElement.getBoundingClientRect();
+                const relativeX = (e.clientX - dragOffsetRef.current.x) - trackRect.left;
+                newTime = Math.max(0, relativeX / zoom);
+            } else {
+                // If dropped outside a track, maybe keep original time or calculate based on timeline container?
+                // For now, let's try to keep it relative to where it was if possible, or just cancel if completely outside?
+                // Better UX: If dropped on "no track", it snaps back (no change).
+                // But if we want to support "drag to empty space to create track" later, we'd handle it here.
+                // For now, if no track found, we don't move it (or we move it to the original track if we can calculate time).
+                // Let's assume if no track is found, we cancel the move (or keep previous values).
+                // Actually, let's try to find the timeline container to at least update time if on the same track area but missed the div?
+                // But the track div covers the whole lane.
+
+                // If newTrackId is null, we might want to cancel or just update time on current track if Y is close?
+                // Let's stick to: if no track found, don't move.
+            }
+
+            if (newTrackId) {
+                moveClip(clip.id, newTime, newTrackId);
+            }
+        };
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, zoom, clip.id, clip.startTime, moveClip]);
+
+    const style = {
+        position: isDragging ? 'fixed' : 'absolute',
+        left: isDragging ? `${dragPosition.x}px` : `${clip.startTime * zoom}px`,
+        top: isDragging ? `${dragPosition.y}px` : 0,
+        width: `${width}px`,
+        height: isDragging ? '100px' : '100%', // Fixed height during drag to match track height
+        backgroundColor: isSelected ? 'var(--primary)' : 'var(--bg-clip)',
+        border: isSelected ? '1px solid white' : '1px solid var(--border)',
+        borderRadius: '4px',
+        overflow: 'hidden',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: isDragging ? 1000 : (isSelected ? 10 : 1), // High z-index during drag
+        opacity: isDragging ? 0.8 : 1,
+        pointerEvents: isDragging ? 'none' : 'auto' // Important: allow events to pass through to underlying tracks for detection
+    };
+
+    // When dragging, we need a placeholder in the original spot? 
+    // Or just move the clip itself? The request said "move freely", implying the clip itself moves.
+    // If we use position: fixed, it pops out of the flow.
+    // We might want to keep a "ghost" in the original spot if we want to show where it was, 
+    // but usually "free drag" means the object itself moves.
+    // However, if we move the object itself, we need to make sure `pointerEvents: none` is set 
+    // so `document.elementsFromPoint` can see the track *under* the clip.
+
     return (
-        <div style={{
-            position: 'absolute',
-            left: `${left}px`,
-            width: `${width}px`,
-            height: '100%',
-            backgroundColor: 'rgba(45, 127, 249, 0.5)',
-            border: '1px solid var(--primary)',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            cursor: 'move',
-            color: 'white',
-            fontSize: '11px',
-            boxSizing: 'border-box'
-        }}>
-            {/* Waveform SVG */}
-            <svg
-                width="100%"
-                height="100%"
-                preserveAspectRatio="none"
-                style={{ position: 'absolute', top: 0, left: 0, opacity: 0.8 }}
-            >
-                <path d={waveformPath} fill="rgba(255, 255, 255, 0.5)" />
-            </svg>
+        <div
+            ref={clipRef}
+            onMouseDown={handleMouseDown}
+            style={style}
+        >
+            {/* Waveform Visualization */}
+            {clip.waveform && (
+                <svg
+                    width="100%"
+                    height="100%"
+                    preserveAspectRatio="none"
+                    style={{ position: 'absolute', top: 0, left: 0, opacity: 0.8 }}
+                >
+                    <path d={waveformPath} fill={isSelected ? 'white' : 'var(--primary)'} />
+                </svg>
+            )}
 
             <div style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
-                padding: '2px 4px',
-                zIndex: 2,
-                textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '100%'
+                top: '2px',
+                left: '4px',
+                fontSize: '10px',
+                color: isSelected ? 'var(--bg-panel)' : 'white',
+                pointerEvents: 'none',
+                fontWeight: 600,
+                textShadow: isSelected ? 'none' : '0 1px 2px rgba(0,0,0,0.5)'
             }}>
-                {clip.id}
+                Clip
             </div>
         </div>
     );

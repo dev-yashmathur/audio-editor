@@ -37,7 +37,11 @@ const Track = ({ track, clips, zoom }) => {
                 padding: '8px',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                position: 'sticky',
+                left: 0,
+                zIndex: 10,
+                backgroundColor: 'var(--bg-panel)' // Ensure opacity covers scrolling content
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: '13px' }}>{track.name}</span>
@@ -62,13 +66,21 @@ const Track = ({ track, clips, zoom }) => {
                     }}>S</button>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Volume2 size={12} color="var(--text-muted)" />
-                        <input type="range" min="0" max="100" defaultValue={track.volume * 100} style={{ width: '100%', height: '4px' }} />
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            defaultValue={track.volume * 100}
+                            onChange={(e) => useAudioStore.getState().updateTrackVolume(track.id, e.target.value / 100)}
+                            style={{ width: '100%', height: '4px' }}
+                        />
                     </div>
                 </div>
             </div>
 
             {/* Track Lane */}
             <div
+                data-track-id={track.id}
                 style={{
                     flex: 1,
                     position: 'relative',

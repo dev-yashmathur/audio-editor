@@ -1,14 +1,16 @@
 import React from 'react';
 import AssetBin from './components/Sidebar/AssetBin';
-import Visualizer from './components/Stage/Visualizer';
 import ActionToolbar from './components/Toolbar/ActionToolbar';
 import Timeline from './components/Timeline/Timeline';
-import './App.css';
+import Visualizer from './components/Stage/Visualizer';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
+
+import useAudioStore from './store/useAudioStore';
 
 function App() {
   return (
-    <div className="app-container" style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-      {/* Zone A: Sidebar */}
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)' }}>
+      <KeyboardShortcuts />
       <div style={{
         width: '280px',
         minWidth: '200px',
@@ -18,31 +20,13 @@ function App() {
       }}>
         <AssetBin />
       </div>
-
-      {/* Main Content Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-
-        {/* Zone B: Visual Stage */}
-        <div style={{
-          height: '40%',
-          minHeight: '200px',
-          borderBottom: '1px solid var(--border)',
-          position: 'relative'
-        }}>
+        <div style={{ height: '40%', borderBottom: '1px solid var(--border)', position: 'relative' }}>
           <Visualizer />
         </div>
-
-        {/* Zone C: Timeline Area */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-dark)',
-          position: 'relative',
-          minHeight: 0
-        }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <ActionToolbar />
-          <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
             <Timeline />
           </div>
         </div>
