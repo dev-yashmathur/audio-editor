@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { Music, Video, FileAudio, Loader2, Beaker } from 'lucide-react';
 import useAudioStore from '../../store/useAudioStore';
-// import { extractAudioFromVideo } from '../../utils/ffmpegUtils';
+import { extractAudioFromVideo } from '../../utils/ffmpegUtils';
 
 const AssetBin = () => {
   const { assets, importFile, addClipToTrack, tracks } = useAudioStore();
@@ -13,11 +13,10 @@ const AssetBin = () => {
       for (const file of files) {
         if (file.type.startsWith('video/')) {
           // Extract audio from video
-          // const audioBlob = await extractAudioFromVideo(file);
+          const audioBlob = await extractAudioFromVideo(file);
           // Create a new File object with the audio blob
-          // const audioFile = new File([audioBlob], file.name.replace(/\.[^/.]+$/, ".mp3"), { type: 'audio/mp3' });
-          // await importFile(audioFile);
-          alert("Video import temporarily disabled");
+          const audioFile = new File([audioBlob], file.name.replace(/\.[^/.]+$/, ".mp3"), { type: 'audio/mp3' });
+          await importFile(audioFile);
         } else if (file.type.startsWith('audio/')) {
           await importFile(file);
         }

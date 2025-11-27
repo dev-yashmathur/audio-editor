@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import Track from './Track';
 import useAudioStore from '../../store/useAudioStore';
 
@@ -63,6 +63,46 @@ const Timeline = () => {
         setScrollLeft(e.target.scrollLeft);
     };
 
+    // Scrubbing Logic
+    const lastSeekTime = useRef(0);
+    const seekThrottleMs = 100;
+
+    const handleRulerMouseDown = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const newTime = Math.max(0, x / zoom);
+
+        useAudioStore.getState().seekTo(newTime); // Immediate seek on click
+
+        const handleMouseMove = (moveEvent) => {
+            const moveX = moveEvent.clientX - rect.left;
+            const moveTime = Math.max(0, moveX / zoom);
+
+            // Immediate visual update
+            useAudioStore.getState().setCurrentTime(moveTime);
+
+            // Throttled audio seek
+            const now = Date.now();
+            if (now - lastSeekTime.current > seekThrottleMs) {
+                useAudioStore.getState().seekTo(moveTime);
+                lastSeekTime.current = now;
+            }
+        };
+
+        const handleMouseUp = (upEvent) => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+
+            // Final seek to ensure accuracy
+            const upX = upEvent.clientX - rect.left;
+            const finalTime = Math.max(0, upX / zoom);
+            useAudioStore.getState().seekTo(finalTime);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    };
+
     // Generate ruler ticks
     const renderRuler = () => {
         const ticks = [];
@@ -70,7 +110,7 @@ const Timeline = () => {
         const tickInterval = 1; // Every second
 
         for (let i = 0; i <= duration; i += tickInterval) {
-            const left = 200 + i * zoom;
+            const left = i * zoom; // Removed 200px offset
             if (left < scrollLeft || left > scrollLeft + window.innerWidth) continue; // Optimization
 
             ticks.push(
@@ -163,7 +203,14 @@ const Timeline = () => {
                 </div>
 
                 {/* Ruler Ticks */}
-                <div style={{ position: 'relative', flex: 1 }}>
+                <div
+                    onMouseDown={handleRulerMouseDown}
+                    style={{
+                        position: 'relative',
+                        flex: 1,
+                        cursor: 'pointer'
+                    }}
+                >
                     {renderRuler()}
 
                     {/* Playhead Indicator on Ruler */}
@@ -177,7 +224,8 @@ const Timeline = () => {
                         borderRight: '10px solid transparent',
                         borderTop: '10px solid var(--primary)',
                         transform: 'translateX(-10px)',
-                        zIndex: 22
+                        zIndex: 22,
+                        pointerEvents: 'none'
                     }} />
                 </div>
             </div>

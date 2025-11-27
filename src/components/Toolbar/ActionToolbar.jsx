@@ -19,7 +19,7 @@ const Icons = {
 };
 
 const ActionToolbar = () => {
-    const { isPlaying, togglePlayback, setIsPlaying, currentTime, splitClip, deleteClips, duplicateClips, selection, undo, redo, skipTime } = useAudioStore();
+    const { isPlaying, togglePlayback, setIsPlaying, currentTime, splitClip, deleteClips, duplicateClips, selection, undo, redo, skipTime, snapEnabled, toggleSnap } = useAudioStore();
 
     console.log('ActionToolbar render. currentTime:', currentTime, typeof currentTime);
 
@@ -149,7 +149,58 @@ const ActionToolbar = () => {
 
             {/* Right Group: View */}
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                <button title="Snap to Grid" style={{ color: 'var(--primary)', border: 'none', background: 'none', cursor: 'pointer', minWidth: '24px', minHeight: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid var(--border)', paddingRight: '16px' }}>
+                    <select
+                        id="export-format"
+                        style={{
+                            backgroundColor: 'var(--bg-panel)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '4px',
+                            padding: '2px 4px',
+                            fontSize: '12px'
+                        }}
+                    >
+                        <option value="wav">WAV</option>
+                        <option value="mp3">MP3</option>
+                        <option value="m4a">M4A</option>
+                    </select>
+                    <button
+                        onClick={() => {
+                            const format = document.getElementById('export-format').value;
+                            useAudioStore.getState().exportProject(format);
+                        }}
+                        style={{
+                            backgroundColor: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Export
+                    </button>
+                </div>
+
+                <button
+                    title="Snap to Grid"
+                    onClick={toggleSnap}
+                    style={{
+                        color: snapEnabled ? 'var(--primary)' : 'var(--text-muted)',
+                        backgroundColor: snapEnabled ? 'rgba(45, 127, 249, 0.1)' : 'transparent',
+                        border: snapEnabled ? '1px solid var(--primary)' : 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        minWidth: '24px',
+                        minHeight: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
                     <Icons.Magnet width={18} height={18} />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

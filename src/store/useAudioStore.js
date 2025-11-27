@@ -8,6 +8,8 @@ const useAudioStore = create((set, get) => ({
     currentTime: 0,
     duration: 60, // Default 60s
     zoom: 50, // Pixels per second
+    snapEnabled: false,
+    gridSize: 1.0, // Seconds
 
     // Track & Clip State
     tracks: [
@@ -90,6 +92,15 @@ const useAudioStore = create((set, get) => ({
 
     setCurrentTime: (time) => set({ currentTime: Math.max(0, time) }),
 
+    seekTo: (time) => {
+        const newTime = Math.max(0, time);
+        set({ currentTime: newTime });
+        const { isPlaying, clips } = get();
+        if (isPlaying) {
+            audioEngine.play(clips, newTime);
+        }
+    },
+
     skipTime: (seconds) => {
         const { currentTime, isPlaying, clips } = get();
         const newTime = Math.max(0, currentTime + seconds);
@@ -102,6 +113,9 @@ const useAudioStore = create((set, get) => ({
     },
 
     setZoom: (zoom) => set({ zoom }),
+
+    toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
+    setGridSize: (gridSize) => set({ gridSize }),
 
     importFile: async (file) => {
         // file is a File object or Blob with name
@@ -264,6 +278,39 @@ const useAudioStore = create((set, get) => ({
     pushHistoryState: () => get().pushHistory(),
 
     setSelection: (ids) => set({ selection: ids }),
+
+    exportProject: async (format = 'wav') => {
+        const { clips, duration } = get();
+        if (clips.length === 0) {
+            alert('No clips to export');
+            return;
+        }
+
+        try {
+            // 1. Render Timeline to AudioBuffer
+            const renderedBuffer = await audioEngine.render(clips, duration);
+
+            // 2. Convert to WAV Blob
+            let blob = audioEngine.bufferToWav(renderedBuffer);
+
+            // 3. Convert to requested format if needed
+            if (format !== 'wav') {
+                const { convertFile } = await import('../utils/ffmpegUtils');
+                blob = await convertFile(blob, format);
+            }
+
+            // 4. Trigger Download
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `project_export.${format}`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Export failed:', e);
+            alert('Export failed. See console for details.');
+        }
+    },
 }));
 
 export default useAudioStore;

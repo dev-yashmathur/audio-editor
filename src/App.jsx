@@ -5,7 +5,7 @@ import Timeline from './components/Timeline/Timeline';
 import Visualizer from './components/Stage/Visualizer';
 import KeyboardShortcuts from './components/KeyboardShortcuts';
 
-import useAudioStore from './store/useAudioStore';
+
 
 function App() {
   return (

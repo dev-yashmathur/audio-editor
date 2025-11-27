@@ -91,6 +91,68 @@ const Clip = ({ clip, zoom }) => {
                 const trackRect = trackElement.getBoundingClientRect();
                 const relativeX = (e.clientX - dragOffsetRef.current.x) - trackRect.left;
                 newTime = Math.max(0, relativeX / zoom);
+
+                // Snap Logic
+                const { snapEnabled, gridSize, clips } = useAudioStore.getState();
+
+                if (snapEnabled) {
+                    const snapThresholdPixels = 15; // Snap if within 15px
+                    const snapThresholdTime = snapThresholdPixels / zoom;
+
+                    let closestSnapTime = null;
+                    let minDistance = Infinity;
+
+                    // 1. Grid Snapping
+                    if (gridSize > 0) {
+                        const gridSnap = Math.round(newTime / gridSize) * gridSize;
+                        const dist = Math.abs(newTime - gridSnap);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closestSnapTime = gridSnap;
+                        }
+                    }
+
+                    // 2. Clip Snapping (Snap Start to Start/End of other clips)
+                    clips.forEach(otherClip => {
+                        if (otherClip.id === clip.id) return; // Skip self
+
+                        // Snap to Start
+                        const distStart = Math.abs(newTime - otherClip.startTime);
+                        if (distStart < minDistance) {
+                            minDistance = distStart;
+                            closestSnapTime = otherClip.startTime;
+                        }
+
+                        // Snap to End
+                        const otherEnd = otherClip.startTime + otherClip.duration;
+                        const distEnd = Math.abs(newTime - otherEnd);
+                        if (distEnd < minDistance) {
+                            minDistance = distEnd;
+                            closestSnapTime = otherEnd;
+                        }
+
+                        // Snap Dragged End to Start/End of other clips?
+                        // (newTime + clip.duration) ~= otherClip.startTime
+                        // newTime ~= otherClip.startTime - clip.duration
+                        const distEndToStart = Math.abs((newTime + clip.duration) - otherClip.startTime);
+                        if (distEndToStart < minDistance) {
+                            minDistance = distEndToStart;
+                            closestSnapTime = otherClip.startTime - clip.duration;
+                        }
+
+                        // (newTime + clip.duration) ~= otherClip.end
+                        const distEndToEnd = Math.abs((newTime + clip.duration) - otherEnd);
+                        if (distEndToEnd < minDistance) {
+                            minDistance = distEndToEnd;
+                            closestSnapTime = otherEnd - clip.duration;
+                        }
+                    });
+
+                    // Apply Snap if within threshold
+                    if (closestSnapTime !== null && minDistance <= snapThresholdTime) {
+                        newTime = closestSnapTime;
+                    }
+                }
             } else {
                 // If dropped outside a track, maybe keep original time or calculate based on timeline container?
                 // For now, let's try to keep it relative to where it was if possible, or just cancel if completely outside?

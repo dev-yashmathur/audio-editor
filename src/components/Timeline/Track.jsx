@@ -40,7 +40,7 @@ const Track = ({ track, clips, zoom }) => {
                 justifyContent: 'space-between',
                 position: 'sticky',
                 left: 0,
-                zIndex: 10,
+                zIndex: 20,
                 backgroundColor: 'var(--bg-panel)' // Ensure opacity covers scrolling content
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
