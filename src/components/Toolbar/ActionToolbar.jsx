@@ -21,8 +21,6 @@ const Icons = {
 const ActionToolbar = () => {
     const { isPlaying, togglePlayback, setIsPlaying, currentTime, splitClip, deleteClips, duplicateClips, selection, undo, redo, skipTime, snapEnabled, toggleSnap, zoom, setZoom } = useAudioStore();
 
-    console.log('ActionToolbar render. currentTime:', currentTime, typeof currentTime);
-
     const formatTime = (time) => {
         try {
             if (time === undefined || time === null || typeof time !== 'number' || isNaN(time)) return '0:00.00';

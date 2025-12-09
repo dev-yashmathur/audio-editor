@@ -379,16 +379,19 @@ const useAudioStore = create((set, get) => ({
     },
 
     exportProject: async (format = 'wav') => {
-        const { clips, tracks, duration } = get();
+        const { clips, tracks } = get();
         if (clips.length === 0) {
             alert('No clips to export');
             return;
         }
 
         try {
+            // Calculate exact duration of content
+            const exportDuration = Math.max(...clips.map(c => c.startTime + c.duration));
+
             // 1. Render Timeline to AudioBuffer
             const effectiveClips = getEffectiveClips(clips, tracks);
-            const renderedBuffer = await audioEngine.render(effectiveClips, duration);
+            const renderedBuffer = await audioEngine.render(effectiveClips, exportDuration);
 
             // 2. Convert to WAV Blob
             let blob = audioEngine.bufferToWav(renderedBuffer);

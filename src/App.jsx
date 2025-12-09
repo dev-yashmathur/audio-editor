@@ -11,7 +11,13 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = React.useState(280);
   const [isResizing, setIsResizing] = React.useState(false);
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+
+  // Vertical Resizing State
+  const [visualizerHeight, setVisualizerHeight] = React.useState(40); // Percentage
+  const [isResizingVertical, setIsResizingVertical] = React.useState(false);
+
   const sidebarRef = React.useRef(null);
+  const contentRef = React.useRef(null);
 
   const startResizing = React.useCallback(() => {
     setIsResizing(true);
@@ -19,6 +25,11 @@ function App() {
 
   const stopResizing = React.useCallback(() => {
     setIsResizing(false);
+    setIsResizingVertical(false);
+  }, []);
+
+  const startResizingVertical = React.useCallback(() => {
+    setIsResizingVertical(true);
   }, []);
 
   const resize = React.useCallback(
@@ -33,8 +44,15 @@ function App() {
           setSidebarWidth(Math.max(150, Math.min(newWidth, 600)));
         }
       }
+
+      if (isResizingVertical && contentRef.current) {
+        const contentRect = contentRef.current.getBoundingClientRect();
+        const relativeY = mouseMoveEvent.clientY - contentRect.top;
+        const percentage = (relativeY / contentRect.height) * 100;
+        setVisualizerHeight(Math.max(20, Math.min(percentage, 80))); // Clamp between 20% and 80%
+      }
     },
-    [isResizing]
+    [isResizing, isResizingVertical]
   );
 
   React.useEffect(() => {
@@ -92,7 +110,7 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+      <div ref={contentRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
 
         {/* Show Sidebar Button (when collapsed) */}
         {isCollapsed && (
@@ -119,10 +137,27 @@ function App() {
           </button>
         )}
 
-        <div style={{ height: '40%', borderBottom: '1px solid var(--border)', position: 'relative' }}>
+        <div style={{ height: `${visualizerHeight}%`, position: 'relative' }}>
           <Visualizer />
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* Vertical Resize Handle */}
+        <div
+          onMouseDown={startResizingVertical}
+          style={{
+            height: '4px',
+            width: '100%',
+            cursor: 'row-resize',
+            backgroundColor: isResizingVertical ? 'var(--primary)' : 'var(--border)',
+            zIndex: 25,
+            transition: 'background-color 0.2s',
+            flexShrink: 0
+          }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--primary)'}
+          onMouseOut={(e) => !isResizingVertical && (e.currentTarget.style.backgroundColor = 'var(--border)')}
+        />
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: `${100 - visualizerHeight}%` }}>
           <ActionToolbar />
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
             <Timeline />
