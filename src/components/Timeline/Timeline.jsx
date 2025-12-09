@@ -3,7 +3,7 @@ import Track from './Track';
 import useAudioStore from '../../store/useAudioStore';
 
 const Timeline = () => {
-    const { tracks, clips, zoom, currentTime, addTrack } = useAudioStore();
+    const { tracks, clips, zoom, currentTime, addTrack, duration } = useAudioStore();
     const containerRef = React.useRef(null);
     const [scrollLeft, setScrollLeft] = React.useState(0);
 
@@ -106,7 +106,7 @@ const Timeline = () => {
     // Generate ruler ticks
     const renderRuler = () => {
         const ticks = [];
-        const duration = 300; // Render 5 minutes for now
+        // Duration is now dynamic from store
         const tickInterval = 1; // Every second
 
         for (let i = 0; i <= duration; i += tickInterval) {
@@ -157,7 +157,7 @@ const Timeline = () => {
             {/* Ruler */}
             <div style={{
                 height: '30px',
-                minWidth: `${200 + 300 * zoom}px`, // Ensure width for scrolling
+                minWidth: `${200 + duration * zoom}px`, // Ensure width for scrolling
                 backgroundColor: 'var(--bg-header)',
                 borderBottom: '1px solid var(--border)',
                 position: 'sticky',
@@ -231,7 +231,7 @@ const Timeline = () => {
             </div>
 
             {/* Tracks Container */}
-            <div style={{ flex: 1, position: 'relative', minWidth: `${200 + 300 * zoom}px` }}>
+            <div style={{ flex: 1, position: 'relative', minWidth: `${200 + duration * zoom}px` }}>
                 {tracks.map(track => (
                     <Track
                         key={track.id}

@@ -19,7 +19,7 @@ const Icons = {
 };
 
 const ActionToolbar = () => {
-    const { isPlaying, togglePlayback, setIsPlaying, currentTime, splitClip, deleteClips, duplicateClips, selection, undo, redo, skipTime, snapEnabled, toggleSnap } = useAudioStore();
+    const { isPlaying, togglePlayback, setIsPlaying, currentTime, splitClip, deleteClips, duplicateClips, selection, undo, redo, skipTime, snapEnabled, toggleSnap, zoom, setZoom } = useAudioStore();
 
     console.log('ActionToolbar render. currentTime:', currentTime, typeof currentTime);
 
@@ -204,9 +204,20 @@ const ActionToolbar = () => {
                     <Icons.Magnet width={18} height={18} />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Icons.ZoomOut width={16} height={16} color="var(--text-muted)" />
-                    <input type="range" min="10" max="200" defaultValue="50" style={{ width: '80px' }} />
-                    <Icons.ZoomIn width={16} height={16} color="var(--text-muted)" />
+                    <button onClick={() => setZoom(Math.max(10, zoom - 10))} style={{ cursor: 'pointer', border: 'none', background: 'none', display: 'flex', alignItems: 'center' }}>
+                        <Icons.ZoomOut width={16} height={16} color="var(--text-muted)" />
+                    </button>
+                    <input
+                        type="range"
+                        min="10"
+                        max="200"
+                        value={zoom}
+                        onChange={(e) => setZoom(Number(e.target.value))}
+                        style={{ width: '80px' }}
+                    />
+                    <button onClick={() => setZoom(Math.min(200, zoom + 10))} style={{ cursor: 'pointer', border: 'none', background: 'none', display: 'flex', alignItems: 'center' }}>
+                        <Icons.ZoomIn width={16} height={16} color="var(--text-muted)" />
+                    </button>
                 </div>
             </div>
         </div>

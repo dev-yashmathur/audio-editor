@@ -2,6 +2,30 @@ import { create } from 'zustand';
 import audioEngine from '../audio/AudioEngine';
 import { generateWaveform } from '../utils/waveformUtils';
 
+const getEffectiveClips = (clips, tracks) => {
+    const soloTrack = tracks.find(t => t.solo);
+    return clips.map(clip => {
+        const track = tracks.find(t => t.id === clip.trackId);
+        if (!track) return { ...clip, effectiveVolume: 0 };
+
+        let effectiveVolume = 0;
+        if (soloTrack) {
+            if (track.solo) {
+                effectiveVolume = (clip.volume || 1.0) * track.volume;
+            } else {
+                effectiveVolume = 0;
+            }
+        } else {
+            if (track.muted) {
+                effectiveVolume = 0;
+            } else {
+                effectiveVolume = (clip.volume || 1.0) * track.volume;
+            }
+        }
+        return { ...clip, effectiveVolume };
+    });
+};
+
 const useAudioStore = create((set, get) => ({
     // Project State
     isPlaying: false,
@@ -36,10 +60,11 @@ const useAudioStore = create((set, get) => ({
 
     // Helper to refresh playback if playing
     refreshPlayback: () => {
-        const { isPlaying, clips, currentTime } = get();
+        const { isPlaying, clips, tracks, currentTime } = get();
         if (isPlaying) {
             // Stop current playback and restart with new clips
-            audioEngine.play(clips, currentTime);
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            audioEngine.play(effectiveClips, currentTime);
         }
     },
 
@@ -76,9 +101,10 @@ const useAudioStore = create((set, get) => ({
     // Actions
     // Playback Actions
     setIsPlaying: (isPlaying) => {
-        const { clips, currentTime } = get();
+        const { clips, tracks, currentTime } = get();
         if (isPlaying) {
-            audioEngine.play(clips, currentTime);
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            audioEngine.play(effectiveClips, currentTime);
         } else {
             audioEngine.pause();
         }
@@ -95,20 +121,22 @@ const useAudioStore = create((set, get) => ({
     seekTo: (time) => {
         const newTime = Math.max(0, time);
         set({ currentTime: newTime });
-        const { isPlaying, clips } = get();
+        const { isPlaying, clips, tracks } = get();
         if (isPlaying) {
-            audioEngine.play(clips, newTime);
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            audioEngine.play(effectiveClips, newTime);
         }
     },
 
     skipTime: (seconds) => {
-        const { currentTime, isPlaying, clips } = get();
+        const { currentTime, isPlaying, clips, tracks } = get();
         const newTime = Math.max(0, currentTime + seconds);
         set({ currentTime: newTime });
 
         // If playing, restart playback from new time
         if (isPlaying) {
-            audioEngine.play(clips, newTime);
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            audioEngine.play(effectiveClips, newTime);
         }
     },
 
@@ -154,6 +182,7 @@ const useAudioStore = create((set, get) => ({
         };
 
         set((state) => ({ clips: [...state.clips, newClip] }));
+        get().recalculateDuration();
         get().refreshPlayback();
     },
 
@@ -167,15 +196,62 @@ const useAudioStore = create((set, get) => ({
         }]
     })),
 
-    updateTrackVolume: (trackId, volume) => set((state) => ({
-        tracks: state.tracks.map(t => t.id === trackId ? { ...t, volume } : t)
-    })),
+    updateTrackVolume: (trackId, volume) => {
+        set((state) => ({
+            tracks: state.tracks.map(t => t.id === trackId ? { ...t, volume } : t)
+        }));
+
+        // Update real-time volume
+        const { clips, tracks, isPlaying } = get();
+        if (isPlaying) {
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            effectiveClips.forEach(clip => {
+                if (clip.trackId === trackId) {
+                    audioEngine.setClipVolume(clip.id, clip.effectiveVolume);
+                }
+            });
+        }
+    },
+
+    toggleTrackMute: (trackId) => {
+        set((state) => ({
+            tracks: state.tracks.map(t => t.id === trackId ? { ...t, muted: !t.muted } : t)
+        }));
+
+        // Update real-time volume (mute affects all clips on this track)
+        const { clips, tracks, isPlaying } = get();
+        if (isPlaying) {
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            // We need to update ALL clips because solo/mute interaction might affect others 
+            // (though mute only affects this track, unless solo logic is involved)
+            // But to be safe and simple, update all.
+            effectiveClips.forEach(clip => {
+                audioEngine.setClipVolume(clip.id, clip.effectiveVolume);
+            });
+        }
+    },
+
+    toggleTrackSolo: (trackId) => {
+        set((state) => ({
+            tracks: state.tracks.map(t => t.id === trackId ? { ...t, solo: !t.solo } : t)
+        }));
+
+        // Update real-time volume (solo affects ALL tracks)
+        const { clips, tracks, isPlaying } = get();
+        if (isPlaying) {
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            effectiveClips.forEach(clip => {
+                audioEngine.setClipVolume(clip.id, clip.effectiveVolume);
+            });
+        }
+    },
 
     addClip: (clip) => {
         get().pushHistory();
         set((state) => ({
             clips: [...state.clips, clip]
         }));
+        get().recalculateDuration();
         get().refreshPlayback();
     },
 
@@ -185,6 +261,7 @@ const useAudioStore = create((set, get) => ({
         set((state) => ({
             clips: state.clips.map(c => c.id === id ? { ...c, ...updates } : c)
         }));
+        get().recalculateDuration();
         // Note: Dragging calls this frequently, so we might not want to refresh playback on every pixel
         // But for "moveClip" (on mouse up), we should.
     },
@@ -224,6 +301,7 @@ const useAudioStore = create((set, get) => ({
             clips: state.clips.filter(c => c.id !== clip.id).concat([leftClip, rightClip]),
             selection: [leftClip.id] // Select the left part
         }));
+        get().recalculateDuration();
         get().refreshPlayback();
     },
 
@@ -233,6 +311,7 @@ const useAudioStore = create((set, get) => ({
             clips: state.clips.filter(c => !ids.includes(c.id)),
             selection: []
         }));
+        get().recalculateDuration();
         get().refreshPlayback();
     },
 
@@ -256,22 +335,31 @@ const useAudioStore = create((set, get) => ({
             clips: [...state.clips, ...newClips],
             selection: newClips.map(c => c.id)
         }));
+        get().recalculateDuration();
         get().refreshPlayback();
     },
 
     moveClip: (id, newStartTime, newTrackId) => {
-        set((state) => ({
-            clips: state.clips.map(c => c.id === id ? {
-                ...c,
-                startTime: Math.max(0, newStartTime),
-                trackId: newTrackId || c.trackId
-            } : c)
-        }));
-        // We don't refresh here because it's called during drag. 
-        // We should refresh on drag end, but we don't have a "drag end" action here.
-        // For now, if playing while dragging, it might be out of sync. 
-        // Ideally, we pause while dragging or update only on drop.
-        // Let's leave it for now, as user didn't complain about drag playback.
+        get().moveClips([{ id, startTime: newStartTime, trackId: newTrackId }]);
+    },
+
+    moveClips: (updates) => {
+        // updates: [{ id, startTime, trackId }]
+        set((state) => {
+            const newClips = state.clips.map(c => {
+                const update = updates.find(u => u.id === c.id);
+                if (update) {
+                    return {
+                        ...c,
+                        startTime: Math.max(0, update.startTime !== undefined ? update.startTime : c.startTime),
+                        trackId: update.trackId || c.trackId
+                    };
+                }
+                return c;
+            });
+            return { clips: newClips };
+        });
+        get().recalculateDuration();
     },
 
     // Helper to push history manually (e.g. before drag start)
@@ -279,8 +367,19 @@ const useAudioStore = create((set, get) => ({
 
     setSelection: (ids) => set({ selection: ids }),
 
+    recalculateDuration: () => {
+        const { clips } = get();
+        if (clips.length === 0) {
+            set({ duration: 60 });
+            return;
+        }
+        const maxEndTime = Math.max(...clips.map(c => c.startTime + c.duration));
+        // Ensure at least 60s, and add 30s buffer
+        set({ duration: Math.max(60, maxEndTime + 30) });
+    },
+
     exportProject: async (format = 'wav') => {
-        const { clips, duration } = get();
+        const { clips, tracks, duration } = get();
         if (clips.length === 0) {
             alert('No clips to export');
             return;
@@ -288,7 +387,8 @@ const useAudioStore = create((set, get) => ({
 
         try {
             // 1. Render Timeline to AudioBuffer
-            const renderedBuffer = await audioEngine.render(clips, duration);
+            const effectiveClips = getEffectiveClips(clips, tracks);
+            const renderedBuffer = await audioEngine.render(effectiveClips, duration);
 
             // 2. Convert to WAV Blob
             let blob = audioEngine.bufferToWav(renderedBuffer);

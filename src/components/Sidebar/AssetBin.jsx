@@ -3,7 +3,7 @@ import { Music, Video, FileAudio, Loader2, Beaker } from 'lucide-react';
 import useAudioStore from '../../store/useAudioStore';
 import { extractAudioFromVideo } from '../../utils/ffmpegUtils';
 
-const AssetBin = () => {
+const AssetBin = ({ onClose }) => {
   const { assets, importFile, addClipToTrack, tracks } = useAudioStore();
   const [isProcessing, setIsProcessing] = React.useState(false);
 
@@ -12,9 +12,7 @@ const AssetBin = () => {
     try {
       for (const file of files) {
         if (file.type.startsWith('video/')) {
-          // Extract audio from video
           const audioBlob = await extractAudioFromVideo(file);
-          // Create a new File object with the audio blob
           const audioFile = new File([audioBlob], file.name.replace(/\.[^/.]+$/, ".mp3"), { type: 'audio/mp3' });
           await importFile(audioFile);
         } else if (file.type.startsWith('audio/')) {
@@ -32,20 +30,17 @@ const AssetBin = () => {
   const createDemoAsset = async () => {
     setIsProcessing(true);
     try {
-      // Create a simple oscillator beep
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const sampleRate = ctx.sampleRate;
-      const duration = 5; // 5 seconds
+      const duration = 5;
       const numFrames = duration * sampleRate;
       const buffer = ctx.createBuffer(1, numFrames, sampleRate);
       const data = buffer.getChannelData(0);
 
       for (let i = 0; i < numFrames; i++) {
-        // Sine wave at 440Hz
         data[i] = Math.sin(i * 440 * 2 * Math.PI / sampleRate) * 0.5;
       }
 
-      // Convert AudioBuffer to WAV Blob
       const wavBlob = await audioBufferToWav(buffer);
       const file = new File([wavBlob], "Demo_Beep.wav", { type: 'audio/wav' });
       await importFile(file);
@@ -56,7 +51,6 @@ const AssetBin = () => {
     }
   };
 
-  // Helper to convert AudioBuffer to WAV (simplified)
   const audioBufferToWav = (buffer) => {
     const numOfChan = buffer.numberOfChannels;
     const length = buffer.length * numOfChan * 2 + 44;
@@ -68,7 +62,6 @@ const AssetBin = () => {
     let offset = 0;
     let pos = 0;
 
-    // write WAVE header
     setUint32(0x46464952); // "RIFF"
     setUint32(length - 8); // file length - 8
     setUint32(0x45564157); // "WAVE"
@@ -85,7 +78,6 @@ const AssetBin = () => {
     setUint32(0x61746164); // "data" - chunk
     setUint32(length - pos - 4); // chunk length
 
-    // write interleaved data
     for (i = 0; i < buffer.numberOfChannels; i++)
       channels.push(buffer.getChannelData(i));
 
@@ -129,7 +121,6 @@ const AssetBin = () => {
   };
 
   const handleDoubleClick = (assetId) => {
-    // Add to first track at 0s for testing
     if (tracks.length > 0) {
       addClipToTrack(tracks[0].id, assetId, 0);
     }
@@ -141,8 +132,17 @@ const AssetBin = () => {
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-header)' }}>
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-header)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ fontSize: '14px', fontWeight: 600 }}>My Media</h2>
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
+          title="Collapse Sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
       </div>
 
       <div style={{ padding: '12px', flex: 1, overflowY: 'auto' }}>

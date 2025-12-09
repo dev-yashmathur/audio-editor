@@ -2,8 +2,11 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import useAudioStore from '../../store/useAudioStore';
 
 const Clip = ({ clip, zoom }) => {
-    const { selection, setSelection, moveClip, pushHistoryState } = useAudioStore();
+    const { selection, setSelection, moveClip, pushHistoryState, assets } = useAudioStore();
     const isSelected = selection.includes(clip.id);
+
+    const asset = assets.find(a => a.id === clip.assetId);
+    const clipName = asset ? asset.name : 'Clip';
 
     const [isDragging, setIsDragging] = useState(false);
     const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
@@ -20,20 +23,20 @@ const Clip = ({ clip, zoom }) => {
         const step = width / points.length;
 
         // Create path: Move to start, line to each point (top), then mirror for bottom
-        let path = `M 0 ${50}`; // Start middle
+        let path = `M 0 ${50} `; // Start middle
 
         // Top half
         points.forEach((val, i) => {
             const x = i * step;
             const y = 50 - (val * 50); // Scale to 50px height (half of 100px track)
-            path += ` L ${x} ${y}`;
+            path += ` L ${x} ${y} `;
         });
 
         // Bottom half (mirror)
         for (let i = points.length - 1; i >= 0; i--) {
             const x = i * step;
             const y = 50 + (points[i] * 50);
-            path += ` L ${x} ${y}`;
+            path += ` L ${x} ${y} `;
         }
 
         path += ' Z';
@@ -44,7 +47,22 @@ const Clip = ({ clip, zoom }) => {
         e.stopPropagation();
         e.preventDefault(); // Prevent text selection
         pushHistoryState(); // Save state before drag
-        setSelection([clip.id]); // Single select for now
+
+        if (e.shiftKey) {
+            // Toggle selection
+            if (isSelected) {
+                setSelection(selection.filter(id => id !== clip.id));
+            } else {
+                setSelection([...selection, clip.id]);
+            }
+        } else {
+            // If not holding shift
+            if (!isSelected) {
+                // If clicking an unselected clip, select only this one
+                setSelection([clip.id]);
+            }
+            // If already selected, do nothing (preserve multi-selection for potential drag)
+        }
 
         const rect = clipRef.current.getBoundingClientRect();
         dragOffsetRef.current = {
@@ -74,17 +92,11 @@ const Clip = ({ clip, zoom }) => {
 
             setIsDragging(false);
 
-            // Calculate new time and track
-            // We need to find the timeline container to get relative X
-            // And find the track element under the cursor
-
-            // 1. Find Track
+            // Calculate new time and track for the DRAGGED clip
             const elements = document.elementsFromPoint(e.clientX, e.clientY);
             const trackElement = elements.find(el => el.getAttribute('data-track-id'));
             const newTrackId = trackElement ? trackElement.getAttribute('data-track-id') : null;
 
-            // 2. Find Time
-            // We can use the drop X position relative to the track element
             let newTime = clip.startTime;
 
             if (trackElement) {
@@ -92,11 +104,11 @@ const Clip = ({ clip, zoom }) => {
                 const relativeX = (e.clientX - dragOffsetRef.current.x) - trackRect.left;
                 newTime = Math.max(0, relativeX / zoom);
 
-                // Snap Logic
-                const { snapEnabled, gridSize, clips } = useAudioStore.getState();
+                // Snap Logic (Only for the dragged clip for now, others follow relative)
+                const { snapEnabled, gridSize, clips, tracks, moveClips, selection } = useAudioStore.getState();
 
                 if (snapEnabled) {
-                    const snapThresholdPixels = 15; // Snap if within 15px
+                    const snapThresholdPixels = 15;
                     const snapThresholdTime = snapThresholdPixels / zoom;
 
                     let closestSnapTime = null;
@@ -112,9 +124,9 @@ const Clip = ({ clip, zoom }) => {
                         }
                     }
 
-                    // 2. Clip Snapping (Snap Start to Start/End of other clips)
+                    // 2. Clip Snapping
                     clips.forEach(otherClip => {
-                        if (otherClip.id === clip.id) return; // Skip self
+                        if (selection.includes(otherClip.id)) return; // Don't snap to other selected clips (they move with us)
 
                         // Snap to Start
                         const distStart = Math.abs(newTime - otherClip.startTime);
@@ -131,16 +143,13 @@ const Clip = ({ clip, zoom }) => {
                             closestSnapTime = otherEnd;
                         }
 
-                        // Snap Dragged End to Start/End of other clips?
-                        // (newTime + clip.duration) ~= otherClip.startTime
-                        // newTime ~= otherClip.startTime - clip.duration
+                        // Snap Dragged End to Start/End of other clips
                         const distEndToStart = Math.abs((newTime + clip.duration) - otherClip.startTime);
                         if (distEndToStart < minDistance) {
                             minDistance = distEndToStart;
                             closestSnapTime = otherClip.startTime - clip.duration;
                         }
 
-                        // (newTime + clip.duration) ~= otherClip.end
                         const distEndToEnd = Math.abs((newTime + clip.duration) - otherEnd);
                         if (distEndToEnd < minDistance) {
                             minDistance = distEndToEnd;
@@ -148,27 +157,52 @@ const Clip = ({ clip, zoom }) => {
                         }
                     });
 
-                    // Apply Snap if within threshold
                     if (closestSnapTime !== null && minDistance <= snapThresholdTime) {
                         newTime = closestSnapTime;
                     }
                 }
+
+                // Calculate Deltas
+                const timeDelta = newTime - clip.startTime;
+
+                let trackDelta = 0;
+                if (newTrackId && newTrackId !== clip.trackId) {
+                    const oldTrackIndex = tracks.findIndex(t => t.id === clip.trackId);
+                    const newTrackIndex = tracks.findIndex(t => t.id === newTrackId);
+                    if (oldTrackIndex !== -1 && newTrackIndex !== -1) {
+                        trackDelta = newTrackIndex - oldTrackIndex;
+                    }
+                }
+
+                // Apply to ALL selected clips
+                const updates = [];
+                selection.forEach(selectedId => {
+                    const selectedClip = clips.find(c => c.id === selectedId);
+                    if (selectedClip) {
+                        let updatedTrackId = selectedClip.trackId;
+
+                        if (trackDelta !== 0) {
+                            const currentTrackIndex = tracks.findIndex(t => t.id === selectedClip.trackId);
+                            const targetTrackIndex = currentTrackIndex + trackDelta;
+                            if (targetTrackIndex >= 0 && targetTrackIndex < tracks.length) {
+                                updatedTrackId = tracks[targetTrackIndex].id;
+                            }
+                        }
+
+                        updates.push({
+                            id: selectedId,
+                            startTime: selectedClip.startTime + timeDelta,
+                            trackId: updatedTrackId
+                        });
+                    }
+                });
+
+                if (updates.length > 0) {
+                    moveClips(updates);
+                }
+
             } else {
-                // If dropped outside a track, maybe keep original time or calculate based on timeline container?
-                // For now, let's try to keep it relative to where it was if possible, or just cancel if completely outside?
-                // Better UX: If dropped on "no track", it snaps back (no change).
-                // But if we want to support "drag to empty space to create track" later, we'd handle it here.
-                // For now, if no track found, we don't move it (or we move it to the original track if we can calculate time).
-                // Let's assume if no track is found, we cancel the move (or keep previous values).
-                // Actually, let's try to find the timeline container to at least update time if on the same track area but missed the div?
-                // But the track div covers the whole lane.
-
-                // If newTrackId is null, we might want to cancel or just update time on current track if Y is close?
-                // Let's stick to: if no track found, don't move.
-            }
-
-            if (newTrackId) {
-                moveClip(clip.id, newTime, newTrackId);
+                // No track found, cancel move? Or just don't move.
             }
         };
 
@@ -190,7 +224,7 @@ const Clip = ({ clip, zoom }) => {
         width: `${width}px`,
         height: isDragging ? '100px' : '100%', // Fixed height during drag to match track height
         backgroundColor: isSelected ? 'var(--primary)' : 'var(--bg-clip)',
-        border: isSelected ? '1px solid white' : '1px solid var(--border)',
+        border: '1px solid white',
         borderRadius: '4px',
         overflow: 'hidden',
         cursor: isDragging ? 'grabbing' : 'grab',
@@ -235,7 +269,7 @@ const Clip = ({ clip, zoom }) => {
                 fontWeight: 600,
                 textShadow: isSelected ? 'none' : '0 1px 2px rgba(0,0,0,0.5)'
             }}>
-                Clip
+                {clipName}
             </div>
         </div>
     );

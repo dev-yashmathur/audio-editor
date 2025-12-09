@@ -11,7 +11,8 @@ const KeyboardShortcuts = () => {
         splitClip,
         currentTime,
         selection,
-        skipTime
+        skipTime,
+        setSelection
     } = useAudioStore();
 
     useEffect(() => {
@@ -23,6 +24,12 @@ const KeyboardShortcuts = () => {
             if (e.code === 'Space') {
                 e.preventDefault();
                 togglePlayback();
+            }
+
+            // Deselect: Escape
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setSelection([]);
             }
 
             // Undo: Cmd+Z / Ctrl+Z
@@ -68,7 +75,7 @@ const KeyboardShortcuts = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [togglePlayback, undo, redo, deleteClips, duplicateClips, splitClip, currentTime, selection, skipTime]);
+    }, [togglePlayback, undo, redo, deleteClips, duplicateClips, splitClip, currentTime, selection, skipTime, setSelection]);
 
     return null; // This component doesn't render anything
 };

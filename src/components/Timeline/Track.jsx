@@ -4,7 +4,7 @@ import { Volume2, Mic, MoreVertical } from 'lucide-react';
 import useAudioStore from '../../store/useAudioStore';
 
 const Track = ({ track, clips, zoom }) => {
-    const { addClipToTrack } = useAudioStore();
+    const { addClipToTrack, toggleTrackMute, toggleTrackSolo, updateTrackVolume } = useAudioStore();
 
     const onDragOver = (e) => {
         e.preventDefault();
@@ -49,21 +49,32 @@ const Track = ({ track, clips, zoom }) => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button style={{
-                        padding: '2px 6px',
-                        borderRadius: '2px',
-                        backgroundColor: track.muted ? 'var(--primary)' : '#444',
-                        fontSize: '10px',
-                        fontWeight: 'bold'
-                    }}>M</button>
-                    <button style={{
-                        padding: '2px 6px',
-                        borderRadius: '2px',
-                        backgroundColor: track.solo ? 'var(--warning)' : '#444',
-                        color: track.solo ? 'black' : 'white',
-                        fontSize: '10px',
-                        fontWeight: 'bold'
-                    }}>S</button>
+                    <button
+                        onClick={() => toggleTrackMute(track.id)}
+                        style={{
+                            padding: '2px 6px',
+                            borderRadius: '2px',
+                            backgroundColor: track.muted ? 'var(--primary)' : '#444',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            border: 'none',
+                            color: 'white'
+                        }}
+                    >M</button>
+                    <button
+                        onClick={() => toggleTrackSolo(track.id)}
+                        style={{
+                            padding: '2px 6px',
+                            borderRadius: '2px',
+                            backgroundColor: track.solo ? 'var(--warning)' : '#444',
+                            color: track.solo ? 'black' : 'white',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            border: 'none'
+                        }}
+                    >S</button>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Volume2 size={12} color="var(--text-muted)" />
                         <input
@@ -71,7 +82,7 @@ const Track = ({ track, clips, zoom }) => {
                             min="0"
                             max="100"
                             defaultValue={track.volume * 100}
-                            onChange={(e) => useAudioStore.getState().updateTrackVolume(track.id, e.target.value / 100)}
+                            onChange={(e) => updateTrackVolume(track.id, e.target.value / 100)}
                             style={{ width: '100%', height: '4px' }}
                         />
                     </div>

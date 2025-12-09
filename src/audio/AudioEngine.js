@@ -3,6 +3,7 @@ class AudioEngine {
         this.audioContext = null;
         this.masterGain = null;
         this.sources = new Set(); // Set<AudioBufferSourceNode>
+        this.activeClips = new Map(); // Map<clipId, { source, gainNode }>
         this.buffers = new Map(); // Map<src, AudioBuffer>
         this.startTime = 0;
         this.pauseTime = 0;
@@ -14,8 +15,29 @@ class AudioEngine {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioContext();
             this.masterGain = this.audioContext.createGain();
-            this.masterGain.connect(this.audioContext.destination);
+
+            // Create Analyser
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 2048; // Good balance for visualizer
+
+            // Connect: masterGain -> analyser -> destination
+            this.masterGain.connect(this.analyser);
+            this.analyser.connect(this.audioContext.destination);
+        } else if (!this.analyser) {
+            // Ensure analyser exists if context exists (e.g. from previous session or HMR)
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 2048;
+
+            // Re-route
+            try {
+                this.masterGain.disconnect();
+            } catch (e) {
+                // Ignore if not connected
+            }
+            this.masterGain.connect(this.analyser);
+            this.analyser.connect(this.audioContext.destination);
         }
+
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume();
         }
@@ -43,7 +65,7 @@ class AudioEngine {
     }
 
     scheduleClip(clip, startTime, offsetTime) {
-        // clip: { id, src, startTime, duration, offset, volume }
+        // clip: { id, src, startTime, duration, offset, volume, effectiveVolume }
         // startTime: when to start playing in the timeline (global time)
         // offsetTime: where we are currently in the timeline (playhead position)
 
@@ -68,17 +90,29 @@ class AudioEngine {
         source.buffer = buffer;
 
         const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = clip.volume || 1.0;
+        // Use effectiveVolume if present, otherwise fallback to volume or 1.0
+        const volume = clip.effectiveVolume !== undefined ? clip.effectiveVolume : (clip.volume || 1.0);
+        gainNode.gain.value = volume;
 
         source.connect(gainNode);
         gainNode.connect(this.masterGain);
 
         source.start(this.audioContext.currentTime + delay, startOffset, duration);
         this.sources.add(source);
+        this.activeClips.set(clip.id, { source, gainNode });
 
         source.onended = () => {
             this.sources.delete(source);
+            this.activeClips.delete(clip.id);
         };
+    }
+
+    setClipVolume(clipId, volume) {
+        const activeClip = this.activeClips.get(clipId);
+        if (activeClip && activeClip.gainNode) {
+            // Smooth transition to avoid clicks
+            activeClip.gainNode.gain.setTargetAtTime(volume, this.audioContext.currentTime, 0.01);
+        }
     }
 
     play(clips, currentTime) {
@@ -110,6 +144,7 @@ class AudioEngine {
             }
         });
         this.sources.clear();
+        this.activeClips.clear();
     }
 
     async render(clips, duration) {
@@ -127,7 +162,8 @@ class AudioEngine {
             source.buffer = buffer;
 
             const gainNode = offlineCtx.createGain();
-            gainNode.gain.value = clip.volume || 1.0;
+            const volume = clip.effectiveVolume !== undefined ? clip.effectiveVolume : (clip.volume || 1.0);
+            gainNode.gain.value = volume;
 
             source.connect(gainNode);
             gainNode.connect(offlineCtx.destination);
