@@ -45,7 +45,7 @@ const Track = ({ track, clips, zoom }) => {
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: '13px' }}>{track.name}</span>
-                    <MoreVertical size={14} color="var(--text-muted)" />
+                    {/* <MoreVertical size={14} color="var(--text-muted)" /> */}
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
